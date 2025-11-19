@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:weather/core/network/network_response.dart';
+import 'package:weather/data/models/weather_model.dart';
 
 enum ParameterEncoding {
   url,      // 參數放在 URL query string
@@ -38,14 +40,18 @@ mixin ApiRequestMixin<T> {
           }
           return request;
         case ParameterEncoding.url:
-          uri = uri.replace(
-            queryParameters: parameters!.map(
-              (key, value) => MapEntry(key, value.toString()),
-             ),
-          );
+          if (parameters != null) {
+            uri = uri.replace(
+              queryParameters: parameters!.map(
+                (key, value) => MapEntry(key, value.toString()),
+              ),
+            );
+          }
           return http.Request(method, uri);
       }
   }
+
+  T convert(Map<String, dynamic> dictionary);
 
   Future<NetworkResponse<T>> request() async  {
     try {
@@ -53,19 +59,16 @@ mixin ApiRequestMixin<T> {
       final response = await http.Response.fromStream(
         await httpRequest.send()
       );
-      final decodeModel = json.decode(response.body);
-      
+      Map<String, dynamic> dictionary = json.decode(response.body);
+      debugPrint('API Response: $dictionary');
+      T decodeModel = convert(dictionary);
       return NetworkResponse(
           statusCode: response.statusCode,
           model: decodeModel
         );
-      
+
     } catch (error) {
       rethrow;
     }
   }
-}
-
-class GetWeatherRequest with ApiRequestMixin {
-  
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:weather/data/models/weather_model.dart';
+import 'package:weather/data/request/get_hourly_forecast_request.dart';
+import 'package:weather/data/request/get_weather_request.dart';
 import 'package:weather/data/service/location_service.dart';
 import 'package:weather/widgets/gradient_background.dart';
 
@@ -13,81 +15,90 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final LocationService _locationService = LocationService();
   LocationData? _locationData;
+  CurrentWeather? curretnWeather;
+  List<HourlyForecast> hourlyForecast = [];
+  List<DailyForecast> dailyForecast = [];
   bool _isLoading = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadLocation();
+    _loadData();
   }
 
-  Future<void> _loadLocation() async {
+  Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
+    // 先取得位置
     final location = await _locationService.getCurrentLocation();
 
-    setState(() {
-      _isLoading = false;
-      if (location != null) {
-        _locationData = location;
-      } else {
+    if (!mounted) return;
+    if (location == null) {
+      setState(() {
+        _isLoading = false;
         _errorMessage = '無法取得位置資訊';
-      }
-    });
+      });
+      return;
+    }
+
+    _locationData = location;
+
+    // 再取得天氣資料
+    try {
+      final getCurrentWeather = GetWeatherRequest(
+        lat: location.latitude,
+        lon: location.longitude,
+      );
+      final getForecast = GetForecastRequest(
+        lat: location.latitude,
+        lon: location.longitude,
+      );
+      final weatherResponse = await getCurrentWeather.request();
+      final forecastResponse = await getForecast.request();
+
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        if (weatherResponse.statusCode == 200) {
+          curretnWeather = weatherResponse.model;
+          hourlyForecast = forecastResponse.model.hourly;
+          dailyForecast = forecastResponse.model.daily;
+          debugPrint('Weather API Response: $curretnWeather');
+          _errorMessage = null;
+        } else {
+          _errorMessage = 'API 錯誤: ${weatherResponse.statusCode}';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = '取得天氣資料失敗: $e';
+      });
+      debugPrint('Error: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 模擬天氣資料
-    final currentWeather = CurrentWeather(
-      temperature: 25,
-      feelsLike: 27,
-      condition: WeatherCondition.sunny,
-      humidity: 65,
-      windSpeed: 12,
-      pressure: 1013,
-      sunrise: DateTime(2024, 1, 1, 6, 30),
-      sunset: DateTime(2024, 1, 1, 17, 45),
-      location: _locationData != null
-          ? '${_locationData!.latitude.toStringAsFixed(2)}, ${_locationData!.longitude.toStringAsFixed(2)}'
-          : '取得位置中...',
-    );
-
-    final hourlyForecast = List.generate(24, (index) {
-      return HourlyForecast(
-        time: DateTime.now().add(Duration(hours: index)),
-        temperature: 20 + (index % 10).toDouble(),
-        condition: WeatherCondition.values[index % 5],
-      );
-    });
-
-    final dailyForecast = List.generate(7, (index) {
-      return DailyForecast(
-        date: DateTime.now().add(Duration(days: index)),
-        highTemperature: 28 + (index % 5).toDouble(),
-        lowTemperature: 18 + (index % 3).toDouble(),
-        condition: WeatherCondition.values[index % 5],
-      );
-    });
-
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: _isLoading
               ? const Text('取得位置中...')
-              : Text(currentWeather.location),
+              : Text(curretnWeather?.location ?? ''),
           centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _loadLocation,
+              onPressed: _loadData,
             ),
           ],
         ),
@@ -101,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(_errorMessage!),
                         const SizedBox(height: 16),
                         ElevatedButton(
-                          onPressed: _loadLocation,
+                          onPressed: _loadData,
                           child: const Text('重試'),
                         ),
                       ],
@@ -110,7 +121,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 : SingleChildScrollView(
                     child: Column(
                       children: [
-                        CurrentWeatherWidget(weather: currentWeather),
+                        if (curretnWeather != null)
+                          CurrentWeatherWidget(weather: curretnWeather!),
                         const SizedBox(height: 16),
                         HourlyForecastWidget(forecasts: hourlyForecast),
                         const SizedBox(height: 16),

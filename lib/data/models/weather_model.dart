@@ -1,3 +1,4 @@
+import 'package:weather/core/network/api_request.dart';
 // 天氣狀況
 enum WeatherCondition {
   sunny,
@@ -34,6 +35,20 @@ enum WeatherCondition {
       case WeatherCondition.stormy:
         return '⛈️';
     }
+  }
+  static WeatherCondition parseCondition(int code) {
+      if (code == 1000) {
+        return WeatherCondition.sunny;
+      } else if (code >= 1003 && code <= 1009) {
+        return WeatherCondition.cloudy;
+      } else if (code >= 1063 && code <= 1201) {
+        return WeatherCondition.rainy;
+      } else if (code >= 1204 && code <= 1237) {
+        return WeatherCondition.snowy;
+      } else if (code >= 1273) {
+        return WeatherCondition.stormy;
+      }
+      return WeatherCondition.cloudy;
   }
 }
 
@@ -87,5 +102,16 @@ class DailyForecast {
     required this.highTemperature,
     required this.lowTemperature,
     required this.condition,
+  });
+}
+
+// 預報資料（包含每小時和每日）
+class ForecastData {
+  final List<HourlyForecast> hourly;
+  final List<DailyForecast> daily;
+
+  ForecastData({
+    required this.hourly,
+    required this.daily,
   });
 }

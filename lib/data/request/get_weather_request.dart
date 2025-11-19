@@ -13,7 +13,7 @@ class GetWeatherRequest with ApiRequestMixin<CurrentWeather> {
   });
 
   @override
-  String get baseUrl => 'https://api.weatherapi.com/v1';
+  String get baseUrl => AppConfig.weatherRestfulHost;
 
   @override
   String get path => '/current.json';
@@ -29,8 +29,17 @@ class GetWeatherRequest with ApiRequestMixin<CurrentWeather> {
   };
 
   @override
-  Future<NetworkResponse<CurrentWeather>> fetch() async {
-    // TODO: convert error
-    return await this.request();
+  CurrentWeather convert(Map<String, dynamic> dictionary) {
+    return CurrentWeather(
+      temperature: (dictionary['current']['temp_c'] as num).toDouble(),
+      feelsLike: (dictionary['current']['feelslike_c'] as num).toDouble(),
+      condition: WeatherCondition.parseCondition(dictionary['current']['condition']['code'] as int),
+      humidity: dictionary['current']['humidity'] as int,
+      windSpeed: (dictionary['current']['wind_kph'] as num).toDouble(),
+      pressure: (dictionary['current']['pressure_mb'] as num).toDouble(),
+      sunrise: DateTime.now(),
+      sunset: DateTime.now(),
+      location: dictionary['location']['name'] as String,
+    );
   }
 }

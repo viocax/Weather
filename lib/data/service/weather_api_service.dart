@@ -20,7 +20,6 @@ class WeatherApiService {
       final url = Uri.parse(
         '$_baseUrl/current.json?key=$_apiKey&q=$lat,$lon&aqi=no',
       );
-
       final response = await _client.get(url);
 
       if (response.statusCode == 200) {
