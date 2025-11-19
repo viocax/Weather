@@ -1,6 +1,5 @@
 import 'package:weather/core/config.dart';
 import 'package:weather/core/network/api_request.dart';
-import 'package:weather/core/network/network_response.dart';
 import 'package:weather/data/models/weather_model.dart';
 
 class GetWeatherRequest with ApiRequestMixin<CurrentWeather> {

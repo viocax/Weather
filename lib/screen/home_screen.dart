@@ -14,7 +14,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final LocationService _locationService = LocationService();
-  LocationData? _locationData;
   CurrentWeather? curretnWeather;
   List<HourlyForecast> hourlyForecast = [];
   List<DailyForecast> dailyForecast = [];
@@ -44,8 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       return;
     }
-
-    _locationData = location;
 
     // 再取得天氣資料
     try {

@@ -1,4 +1,3 @@
-import 'package:weather/core/network/api_request.dart';
 // 天氣狀況
 enum WeatherCondition {
   sunny,

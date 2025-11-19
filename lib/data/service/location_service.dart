@@ -77,7 +77,7 @@ class LocationService {
       if (permission == LocationPermission.deniedForever) {
         debugPrint('定位權限被永久拒絕');
         return null;
-      }
+      } 
 
       // 取得當前位置
       Position position = await _geolocator.getCurrentPosition();
