@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:weather/screen/home_screen.dart';
+import 'package:weather/screen/settings_screen.dart';
 
 enum HomeTabbarType {
   home,
@@ -35,7 +36,7 @@ enum HomeTabbarType {
       case HomeTabbarType.search:
         return const Center(child: Text('搜尋'));
       case HomeTabbarType.settings:
-        return const Center(child: Text('設定'));
+        return const SettingsScreen();
     }
   }
 }

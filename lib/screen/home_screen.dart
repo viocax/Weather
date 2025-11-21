@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:weather/data/models/settings_model.dart';
 import 'package:weather/data/models/weather_model.dart';
 import 'package:weather/data/request/get_hourly_forecast_request.dart';
 import 'package:weather/data/request/get_weather_request.dart';
 import 'package:weather/data/service/location_service.dart';
+import 'package:weather/services/settings_service.dart';
+import 'package:weather/utils/format_helper.dart';
 import 'package:weather/widgets/gradient_background.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,16 +19,34 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final LocationService _locationService = LocationService();
+  final SettingsService _settingsService = SettingsService();
   CurrentWeather? curretnWeather;
   List<HourlyForecast> hourlyForecast = [];
   List<DailyForecast> dailyForecast = [];
+  AppSettings _settings = AppSettings();
   bool _isLoading = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    Future.microtask(() {
+      _loadSettings();
+      _loadData();
+    });
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await _settingsService.loadSettings();
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+        });
+      }
+    } catch (e) {
+      debugPrint('載入設定失敗: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -119,11 +142,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       children: [
                         if (curretnWeather != null)
-                          CurrentWeatherWidget(weather: curretnWeather!),
+                          CurrentWeatherWidget(
+                            weather: curretnWeather!,
+                            settings: _settings,
+                          ),
                         const SizedBox(height: 16),
-                        HourlyForecastWidget(forecasts: hourlyForecast),
+                        HourlyForecastWidget(
+                          forecasts: hourlyForecast,
+                          settings: _settings,
+                        ),
                         const SizedBox(height: 16),
-                        DailyForecastWidget(forecasts: dailyForecast),
+                        DailyForecastWidget(
+                          forecasts: dailyForecast,
+                          settings: _settings,
+                        ),
                       ],
                     ),
                   ),
@@ -135,8 +167,13 @@ class _HomeScreenState extends State<HomeScreen> {
 // 當前位置天氣 Widget
 class CurrentWeatherWidget extends StatelessWidget {
   final CurrentWeather weather;
+  final AppSettings settings;
 
-  const CurrentWeatherWidget({super.key, required this.weather});
+  const CurrentWeatherWidget({
+    super.key,
+    required this.weather,
+    required this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -159,14 +196,14 @@ class CurrentWeatherWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${weather.temperature.toInt()}°C',
+                      FormatHelper.formatTemperature(weather.temperature, settings),
                       style: const TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      '體感 ${weather.feelsLike.toInt()}°C',
+                      '體感 ${FormatHelper.formatTemperature(weather.feelsLike, settings)}',
                       style: const TextStyle(
                         fontSize: 16,
                         color: Colors.grey,
@@ -202,11 +239,11 @@ class CurrentWeatherWidget extends StatelessWidget {
               children: [
                 _buildInfoItem(
                   '日出',
-                  '${weather.sunrise.hour.toString().padLeft(2, '0')}:${weather.sunrise.minute.toString().padLeft(2, '0')}',
+                  FormatHelper.formatTime(weather.sunrise, settings),
                 ),
                 _buildInfoItem(
                   '日落',
-                  '${weather.sunset.hour.toString().padLeft(2, '0')}:${weather.sunset.minute.toString().padLeft(2, '0')}',
+                  FormatHelper.formatTime(weather.sunset, settings),
                 ),
               ],
             ),
@@ -242,8 +279,13 @@ class CurrentWeatherWidget extends StatelessWidget {
 // 24小時預報 Widget
 class HourlyForecastWidget extends StatelessWidget {
   final List<HourlyForecast> forecasts;
+  final AppSettings settings;
 
-  const HourlyForecastWidget({super.key, required this.forecasts});
+  const HourlyForecastWidget({
+    super.key,
+    required this.forecasts,
+    required this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -270,13 +312,13 @@ class HourlyForecastWidget extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final forecast = forecasts[index];
                   return Container(
-                    width: 60,
+                    width: 70,
                     margin: const EdgeInsets.only(right: 8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          '${forecast.time.hour}時',
+                          FormatHelper.formatHour(forecast.time, settings),
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(height: 4),
@@ -286,7 +328,7 @@ class HourlyForecastWidget extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${forecast.temperature.toInt()}°',
+                          FormatHelper.formatTemperatureShort(forecast.temperature, settings),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -308,8 +350,13 @@ class HourlyForecastWidget extends StatelessWidget {
 // 7日預報 Widget
 class DailyForecastWidget extends StatelessWidget {
   final List<DailyForecast> forecasts;
+  final AppSettings settings;
 
-  const DailyForecastWidget({super.key, required this.forecasts});
+  const DailyForecastWidget({
+    super.key,
+    required this.forecasts,
+    required this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +394,7 @@ class DailyForecastWidget extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      '${forecast.lowTemperature.toInt()}°',
+                      FormatHelper.formatTemperatureShort(forecast.lowTemperature, settings),
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.blue,
@@ -355,7 +402,7 @@ class DailyForecastWidget extends StatelessWidget {
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      '${forecast.highTemperature.toInt()}°',
+                      FormatHelper.formatTemperatureShort(forecast.highTemperature, settings),
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.red,
