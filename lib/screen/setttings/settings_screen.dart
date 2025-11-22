@@ -1,59 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:weather/data/models/settings_model.dart';
-import 'package:weather/services/settings_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:weather/screen/setttings/bloc/settings_bloc.dart';
+import 'package:weather/screen/setttings/bloc/settings_event.dart';
+import 'package:weather/screen/setttings/bloc/settings_state.dart';
 import 'package:weather/widgets/gradient_background.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => SettingsBloc()..add(const LoadSettings()),
+      child: const _SettingsScreenView(),
+    );
+  }
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  final SettingsService _settingsService = SettingsService();
-  AppSettings _settings = AppSettings();
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    try {
-      final settings = await _settingsService.loadSettings();
-      setState(() {
-        _settings = settings;
-        _isLoading = false;
-      });
-    } catch (e) {
-      // 如果載入失敗，使用預設設定
-      setState(() {
-        _settings = AppSettings();
-        _isLoading = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('載入設定失敗，使用預設設定')),
-        );
-      }
-    }
-  }
-
-  Future<void> _updateSettings(AppSettings newSettings) async {
-    setState(() {
-      _settings = newSettings;
-    });
-
-    final success = await _settingsService.saveSettings(newSettings);
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('儲存設定失敗')),
-      );
-    }
-  }
+class _SettingsScreenView extends StatelessWidget {
+  const _SettingsScreenView();
 
   @override
   Widget build(BuildContext context) {
@@ -65,38 +30,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
+        body: BlocConsumer<SettingsBloc, SettingsState>(
+          listener: (context, state) {
+            if (state is SettingsError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.message)),
+              );
+            }
+          },
+          builder: (context, state) {
+            if (state is SettingsLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (state is SettingsLoaded || state is SettingsSaving) {
+              final settings = state is SettingsLoaded
+                  ? state.settings
+                  : (state as SettingsSaving).settings;
+
+              return ListView(
                 children: [
                   _buildSectionHeader('溫度與時間'),
                   _buildSwitchTile(
+                    context: context,
                     title: '溫度單位',
-                    subtitle: _settings.useCelsius ? '攝氏 (°C)' : '華氏 (°F)',
-                    value: _settings.useCelsius,
+                    subtitle: settings.useCelsius ? '攝氏 (°C)' : '華氏 (°F)',
+                    value: settings.useCelsius,
                     onChanged: (value) {
-                      _updateSettings(_settings.copyWith(useCelsius: value));
+                      context.read<SettingsBloc>().add(ToggleTemperatureUnit(value));
                     },
                   ),
                   _buildSwitchTile(
+                    context: context,
                     title: '時間格式',
-                    subtitle: _settings.use24HourFormat ? '24 小時制' : '12 小時制',
-                    value: _settings.use24HourFormat,
+                    subtitle: settings.use24HourFormat ? '24 小時制' : '12 小時制',
+                    value: settings.use24HourFormat,
                     onChanged: (value) {
-                      _updateSettings(_settings.copyWith(use24HourFormat: value));
+                      context.read<SettingsBloc>().add(ToggleTimeFormat(value));
                     },
                   ),
                   const Divider(color: Colors.white24),
                   _buildSectionHeader('外觀'),
-                  _buildThemeTile(),
+                  _buildThemeTile(context, settings.theme),
                   const Divider(color: Colors.white24),
                   _buildSectionHeader('通知'),
                   _buildSwitchTile(
+                    context: context,
                     title: '啟用通知',
-                    subtitle: _settings.enableNotifications ? '已開啟' : '已關閉',
-                    value: _settings.enableNotifications,
+                    subtitle: settings.enableNotifications ? '已開啟' : '已關閉',
+                    value: settings.enableNotifications,
                     onChanged: (value) {
-                      _updateSettings(_settings.copyWith(enableNotifications: value));
+                      context.read<SettingsBloc>().add(ToggleNotifications(value));
                     },
                   ),
                   const Divider(color: Colors.white24),
@@ -112,7 +96,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.code,
                   ),
                 ],
+              );
+            }
+
+            return const Center(
+              child: Text(
+                '無法載入設定',
+                style: TextStyle(color: Colors.white),
               ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -132,6 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSwitchTile({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required bool value,
@@ -154,18 +149,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildThemeTile() {
+  Widget _buildThemeTile(BuildContext context, String currentTheme) {
     return ListTile(
       title: const Text(
         '主題模式',
         style: TextStyle(color: Colors.white),
       ),
       subtitle: Text(
-        _getThemeDisplayName(_settings.theme),
+        _getThemeDisplayName(currentTheme),
         style: const TextStyle(color: Colors.white70),
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.white70),
-      onTap: () => _showThemeDialog(),
+      onTap: () => _showThemeDialog(context, currentTheme),
     );
   }
 
@@ -181,25 +176,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showThemeDialog() {
+  void _showThemeDialog(BuildContext context, String currentTheme) {
+    final settingsBloc = context.read<SettingsBloc>();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('選擇主題'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildThemeOption('system', '跟隨系統'),
-            _buildThemeOption('light', '淺色'),
-            _buildThemeOption('dark', '深色'),
+            _buildThemeOption(dialogContext, settingsBloc, 'system', '跟隨系統', currentTheme),
+            _buildThemeOption(dialogContext, settingsBloc, 'light', '淺色', currentTheme),
+            _buildThemeOption(dialogContext, settingsBloc, 'dark', '深色', currentTheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildThemeOption(String value, String label) {
-    final isSelected = _settings.theme == value;
+  Widget _buildThemeOption(
+    BuildContext context,
+    SettingsBloc bloc,
+    String value,
+    String label,
+    String currentTheme,
+  ) {
+    final isSelected = currentTheme == value;
     return ListTile(
       leading: Icon(
         isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
@@ -207,7 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       title: Text(label),
       onTap: () {
-        _updateSettings(_settings.copyWith(theme: value));
+        bloc.add(ChangeTheme(value));
         Navigator.pop(context);
       },
     );

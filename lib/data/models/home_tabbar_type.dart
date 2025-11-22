@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:weather/screen/home_screen.dart';
-import 'package:weather/screen/settings_screen.dart';
+import 'package:weather/screen/setttings/settings_screen.dart';
 
 enum HomeTabbarType {
   home,

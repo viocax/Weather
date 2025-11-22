@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:weather/core/network/network_response.dart';
-import 'package:weather/data/models/weather_model.dart';
 
 enum ParameterEncoding {
   url,      // 參數放在 URL query string
