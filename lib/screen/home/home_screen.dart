@@ -1,107 +1,27 @@
-import 'dart:async';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:weather/data/models/settings_model.dart';
 import 'package:weather/data/models/weather_model.dart';
-import 'package:weather/data/request/get_hourly_forecast_request.dart';
-import 'package:weather/data/request/get_weather_request.dart';
-import 'package:weather/data/service/location_service.dart';
-import 'package:weather/services/settings_service.dart';
+import 'package:weather/screen/home/bloc/home_screen_bloc.dart';
+import 'package:weather/screen/home/bloc/home_screen_event.dart';
+import 'package:weather/screen/home/bloc/home_screen_state.dart';
 import 'package:weather/utils/format_helper.dart';
 import 'package:weather/widgets/gradient_background.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => HomeScreenBloc()..add(GetHomeScreenDataEvent()),
+      child: const _HomeScreenView(),
+    );
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final LocationService _locationService = LocationService();
-  final SettingsService _settingsService = SettingsService();
-  CurrentWeather? curretnWeather;
-  List<HourlyForecast> hourlyForecast = [];
-  List<DailyForecast> dailyForecast = [];
-  AppSettings _settings = AppSettings();
-  bool _isLoading = true;
-  String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      _loadSettings();
-      _loadData();
-    });
-  }
-
-  Future<void> _loadSettings() async {
-    try {
-      final settings = await _settingsService.loadSettings();
-      if (mounted) {
-        setState(() {
-          _settings = settings;
-        });
-      }
-    } catch (e) {
-      debugPrint('載入設定失敗: $e');
-    }
-  }
-
-  Future<void> _loadData() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    // 先取得位置
-    final location = await _locationService.getCurrentLocation();
-
-    if (!mounted) return;
-    if (location == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = '無法取得位置資訊';
-      });
-      return;
-    }
-
-    // 再取得天氣資料
-    try {
-      final getCurrentWeather = GetWeatherRequest(
-        lat: location.latitude,
-        lon: location.longitude,
-      );
-      final getForecast = GetForecastRequest(
-        lat: location.latitude,
-        lon: location.longitude,
-      );
-      final weatherResponse = await getCurrentWeather.request();
-      final forecastResponse = await getForecast.request();
-
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        if (weatherResponse.statusCode == 200) {
-          curretnWeather = weatherResponse.model;
-          hourlyForecast = forecastResponse.model.hourly;
-          dailyForecast = forecastResponse.model.daily;
-          debugPrint('Weather API Response: $curretnWeather');
-          _errorMessage = null;
-        } else {
-          _errorMessage = 'API 錯誤: ${weatherResponse.statusCode}';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = '取得天氣資料失敗: $e';
-      });
-      debugPrint('Error: $e');
-    }
-  }
+class _HomeScreenView extends StatelessWidget {
+  const _HomeScreenView();
 
   @override
   Widget build(BuildContext context) {
@@ -109,56 +29,55 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: _isLoading
-              ? const Text('取得位置中...')
-              : Text(curretnWeather?.location ?? ''),
-          centerTitle: true,
           backgroundColor: Colors.transparent,
-          elevation: 0,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _loadData,
-            ),
-          ],
+          title: const Text('天氣預報'),
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _errorMessage != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(_errorMessage!),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _loadData,
-                          child: const Text('重試'),
-                        ),
-                      ],
+        body: BlocBuilder<HomeScreenBloc, HomeScreenState>(
+          builder: (context, state) {
+            if (state is HomeScreenLoadingState) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (state is HomeScreenErrorState) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(state.message),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.read<HomeScreenBloc>().add(
+                        HomeScreenErrorRetryEvent(),
+                      ),
+                      child: const Text('重試'),
                     ),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        if (curretnWeather != null)
-                          CurrentWeatherWidget(
-                            weather: curretnWeather!,
-                            settings: _settings,
-                          ),
-                        const SizedBox(height: 16),
-                        HourlyForecastWidget(
-                          forecasts: hourlyForecast,
-                          settings: _settings,
-                        ),
-                        const SizedBox(height: 16),
-                        DailyForecastWidget(
-                          forecasts: dailyForecast,
-                          settings: _settings,
-                        ),
-                      ],
+                  ],
+                ),
+              );
+            } else if (state is HomeScreenLoadedState) {
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    if (state.currentWeather != null)
+                      CurrentWeatherWidget(
+                        weather: state.currentWeather!,
+                        settings: state.settings,
+                      ),
+                    const SizedBox(height: 16),
+                    HourlyForecastWidget(
+                      forecasts: state.hourlyForecast,
+                      settings: state.settings,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    DailyForecastWidget(
+                      forecasts: state.dailyForecast,
+                      settings: state.settings,
+                    ),
+                  ],
+                ),
+              );
+            }
+            return const SizedBox();
+          },
+        ),
       ),
     );
   }
@@ -196,7 +115,10 @@ class CurrentWeatherWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      FormatHelper.formatTemperature(weather.temperature, settings),
+                      FormatHelper.formatTemperature(
+                        weather.temperature,
+                        settings,
+                      ),
                       style: const TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
@@ -204,10 +126,7 @@ class CurrentWeatherWidget extends StatelessWidget {
                     ),
                     Text(
                       '體感 ${FormatHelper.formatTemperature(weather.feelsLike, settings)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -256,20 +175,11 @@ class CurrentWeatherWidget extends StatelessWidget {
   Widget _buildInfoItem(String label, String value) {
     return Column(
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -298,10 +208,7 @@ class HourlyForecastWidget extends StatelessWidget {
           children: [
             const Text(
               '24小時預報',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -328,7 +235,10 @@ class HourlyForecastWidget extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          FormatHelper.formatTemperatureShort(forecast.temperature, settings),
+                          FormatHelper.formatTemperatureShort(
+                            forecast.temperature,
+                            settings,
+                          ),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -369,10 +279,7 @@ class DailyForecastWidget extends StatelessWidget {
           children: [
             const Text(
               '7日預報',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             ...forecasts.map((forecast) {
@@ -394,19 +301,19 @@ class DailyForecastWidget extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      FormatHelper.formatTemperatureShort(forecast.lowTemperature, settings),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.blue,
+                      FormatHelper.formatTemperatureShort(
+                        forecast.lowTemperature,
+                        settings,
                       ),
+                      style: const TextStyle(fontSize: 14, color: Colors.blue),
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      FormatHelper.formatTemperatureShort(forecast.highTemperature, settings),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.red,
+                      FormatHelper.formatTemperatureShort(
+                        forecast.highTemperature,
+                        settings,
                       ),
+                      style: const TextStyle(fontSize: 14, color: Colors.red),
                     ),
                   ],
                 ),
